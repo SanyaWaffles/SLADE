@@ -17,8 +17,10 @@
 /dist/*.dll
 /dist/*.pdb
 /dist/*.exe
+/dist/*.pk3
 /*.ncb
-/release
+/Release
+/Debug
 /src/bzip2/Release
 /src/lzma/Release
 /src/zlib/Release
