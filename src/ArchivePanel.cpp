@@ -63,6 +63,7 @@
 #include "PaletteManager.h"
 #include "MapReplaceDialog.h"
 #include "Dialogs/RunDialog.h"
+#include "DataEntryPanel.h"
 #include <wx/aui/auibook.h>
 #include <wx/aui/auibar.h>
 #include <wx/filename.h>
@@ -319,6 +320,7 @@ ArchivePanel::ArchivePanel(wxWindow* parent, Archive* archive)
 	ansi_area = new ANSIEntryPanel(this);
 	map_area = new MapEntryPanel(this);
 	audio_area = new AudioEntryPanel(this);
+	data_area = new DataEntryPanel(this);
 
 
 	// --- Setup Layout ---
@@ -839,7 +841,7 @@ bool ArchivePanel::buildArchive()
 {
 	if (archive->getType() != ARCHIVE_FOLDER)
 	{
-		wxMessageBox("This function is not supported with archives", "Can't build archive", wxICON_ERROR);
+		wxMessageBox("This function is only supported with directories", "Can't build archive", wxICON_ERROR);
 		return false;
 	}
 
@@ -896,6 +898,9 @@ bool ArchivePanel::renameEntry(bool each)
 	// Begin recording undo level
 	undo_manager->beginRecord("Rename Entry");
 
+	/* Define alphabet */
+	const wxString alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 	// Check any are selected
 	if (each || selection.size() == 1)
 	{
@@ -904,7 +909,7 @@ bool ArchivePanel::renameEntry(bool each)
 		{
 
 			// Prompt for a new name
-			string new_name = wxGetTextFromUser("Enter new entry name: (* = unchanged)", "Rename", selection[a]->getName());
+			string new_name = wxGetTextFromUser("Enter new entry name:", "Rename", selection[a]->getName());
 
 			// Rename entry (if needed)
 			if (!new_name.IsEmpty() && selection[a]->getName() != new_name)
@@ -922,7 +927,7 @@ bool ArchivePanel::renameEntry(bool each)
 		string filter = Misc::massRenameFilter(names);
 
 		// Prompt for a new name
-		string new_name = wxGetTextFromUser("Enter new entry name: (* = unchanged)", "Rename", filter);
+		string new_name = wxGetTextFromUser("Enter new entry name: (* = unchanged, ^ = alphabet letter, ^^ = lower case\n% = alphabet repeat number, & = entry number, %% or && = n-1)", "Rename", filter);
 
 		// Apply mass rename to list of names
 		if (!new_name.IsEmpty())
@@ -944,7 +949,17 @@ bool ArchivePanel::renameEntry(bool each)
 				// Rename the entry (if needed)
 				if (fn.GetName() != names[a])
 				{
-					fn.SetName(names[a]);							// Change name
+					wxString filename = names[a];
+					/* file renaming syntax */
+					int num = a / alphabet.size();
+					int cn = a-(num*alphabet.size());
+					filename.Replace("^^", alphabet.Lower()[cn]);
+					filename.Replace("^", alphabet[cn]);
+					filename.Replace("%%", wxString::FromDouble(num, 0));
+					filename.Replace("%", wxString::FromDouble(num+1, 0));
+					filename.Replace("&&", wxString::FromDouble(a, 0));
+					filename.Replace("&", wxString::FromDouble(a+1, 0));
+					fn.SetName(filename);							// Change name
 					archive->renameEntry(entry, fn.GetFullName());	// Rename in archive
 				}
 			}
@@ -1497,11 +1512,12 @@ bool ArchivePanel::importEntry()
  *******************************************************************/
 bool ArchivePanel::exportEntry()
 {
-	// Get a list of selected entries
+	// Get a list of selected entries & dirs
 	vector<ArchiveEntry*> selection = entry_list->getSelectedEntries();
+	vector<ArchiveTreeNode*> selected_dirs = entry_list->getSelectedDirectories();
 
 	// If we're just exporting 1 entry
-	if (selection.size() == 1)
+	if (selection.size() == 1 && selected_dirs.size() == 0)
 	{
 		string name = Misc::lumpNameToFileName(selection[0]->getName());
 		wxFileName fn(name);
@@ -1520,7 +1536,7 @@ bool ArchivePanel::exportEntry()
 		SFileDialog::fd_info_t info;
 		if (SFileDialog::saveFiles(info, "Export Multiple Entries (Filename is ignored)", "Any File (*.*)|*.*", this))
 		{
-			// Go through the selection
+			// Go through the selected entries
 			for (size_t a = 0; a < selection.size(); a++)
 			{
 				// Setup entry filename
@@ -1534,6 +1550,10 @@ bool ArchivePanel::exportEntry()
 				// Do export
 				selection[a]->exportFile(fn.GetFullPath());
 			}
+
+			// Go through selected dirs
+			for (unsigned a = 0; a < selected_dirs.size(); a++)
+				selected_dirs[a]->exportTo(info.path + "/" + selected_dirs[a]->getName());
 		}
 	}
 
@@ -2465,6 +2485,8 @@ bool ArchivePanel::openEntry(ArchiveEntry* entry, bool force)
 			new_area = switches_area;
 		else if (!entry->getType()->getEditor().Cmp("audio"))
 			new_area = audio_area;
+		else if (!entry->getType()->getEditor().Cmp("data"))
+			new_area = data_area;
 		else if (!entry->getType()->getEditor().Cmp("default"))
 			new_area = default_area;
 		else

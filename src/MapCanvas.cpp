@@ -86,6 +86,7 @@ CVAR(Int, map_crosshair, 0, CVAR_SAVE)
 CVAR(Bool, map_show_selection_numbers, true, CVAR_SAVE)
 CVAR(Int, map_max_selection_numbers, 1000, CVAR_SAVE)
 CVAR(Bool, mlook_invert_y, false, CVAR_SAVE)
+CVAR(Int, grid_64_style, 1, CVAR_SAVE)
 
 // for testing
 PolygonSplitter splitter;
@@ -576,9 +577,17 @@ void MapCanvas::drawGrid()
 		}
 	}
 
+	// Disable dashed lines if 64 grid is set to crosses
+	if (grid_64_style > 1)
+		glDisable(GL_LINE_STIPPLE);
+
 	// Draw 64 grid if it's not too small and we're not on a larger grid size
-	if (64 > grid_hidelevel && gridsize < 64)
+	if (64 > grid_hidelevel && gridsize < 64 && grid_64_style > 0)
 	{
+		int cross_size = 8;
+		if (gridsize < cross_size)
+			cross_size = gridsize;
+
 		OpenGL::setColour(ColourConfiguration::getColour("map_64grid"));
 
 		// Vertical
@@ -586,8 +595,25 @@ void MapCanvas::drawGrid()
 		for (int x = start_x-ofs; x <= end_x; x += 64)
 		{
 			glBegin(GL_LINES);
-			glVertex2d(x, start_y);
-			glVertex2d(x, end_y);
+
+			if (grid_64_style > 1)
+			{
+				// Cross style
+				int y = start_y - (start_y % 64);
+				while (y < end_y)
+				{
+					glVertex2d(x, y - cross_size);
+					glVertex2d(x, y + cross_size);
+					y += 64;
+				}
+			}
+			else
+			{
+				// Full style
+				glVertex2d(x, start_y);
+				glVertex2d(x, end_y);
+			}
+
 			glEnd();
 		}
 
@@ -596,8 +622,25 @@ void MapCanvas::drawGrid()
 		for (int y = start_y-ofs; y <= end_y; y += 64)
 		{
 			glBegin(GL_LINES);
-			glVertex2d(start_x, y);
-			glVertex2d(end_x, y);
+
+			if (grid_64_style > 1)
+			{
+				// Cross style
+				int x = start_x - (start_x % 64);
+				while (x < end_x)
+				{
+					glVertex2d(x - cross_size, y);
+					glVertex2d(x + cross_size, y);
+					x += 64;
+				}
+			}
+			else
+			{
+				// Full style
+				glVertex2d(start_x, y);
+				glVertex2d(end_x, y);
+			}
+
 			glEnd();
 		}
 	}
@@ -2494,7 +2537,7 @@ void MapCanvas::changeTexture3d(selection_3d_t first)
 	// Open texture browser
 	MapTextureBrowser browser(theMapEditor, type, tex, &(theMapEditor->mapEditor().getMap()));
 	browser.SetTitle("Browse Texture");
-	if (browser.ShowModal() == wxID_OK)
+	if (browser.ShowModal() == wxID_OK && browser.getSelectedItem() != NULL)
 	{
 		bool mix = theGameConfiguration->mixTexFlats();
 		tex = browser.getSelectedItem()->getName();
@@ -2579,7 +2622,7 @@ void MapCanvas::editObjectProperties(vector<MapObject*>& list)
 		type = "Thing";
 
 	// Begin recording undo level
-	editor->undoManager()->beginRecord(S_FMT("Property Edit (%s)", type));
+	editor->beginUndoRecord(S_FMT("Property Edit (%s)", type));
 	for (unsigned a = 0; a < list.size(); a++)
 		editor->recordPropertyChangeUndoStep(list[a]);
 
@@ -2587,7 +2630,7 @@ void MapCanvas::editObjectProperties(vector<MapObject*>& list)
 	if (list.size() == 1)
 		type += S_FMT(" #%d", list[0]->getIndex());
 	else if (list.size() > 1)
-		selsize = S_FMT("(%d selected)", list.size());
+		selsize = S_FMT("(%u selected)", list.size());
 
 	// Create dialog for properties panel
 	SDialog dlg(theMapEditor, S_FMT("%s Properties %s", type, selsize), S_FMT("mobjprops_%d", editor->editMode()), -1, -1);
@@ -2626,7 +2669,7 @@ void MapCanvas::editObjectProperties(vector<MapObject*>& list)
 	}
 
 	// End undo level
-	editor->undoManager()->endRecord(true);
+	editor->endUndoRecord(true);
 
 	// Clear property grid to avoid crash (wxPropertyGrid is at fault there)
 	//if (panel_props)
@@ -3195,8 +3238,12 @@ void MapCanvas::keyBinds2d(string name)
  *******************************************************************/
 void MapCanvas::keyBinds3d(string name)
 {
+	// Escape from 3D mode
+	if (name == "map_edit_cancel")
+		changeEditMode(mode_last);
+
 	// Toggle fog
-	if (name == "me3d_toggle_fog")
+	else if (name == "me3d_toggle_fog")
 	{
 		bool fog = renderer_3d->fogEnabled();
 		renderer_3d->enableFog(!fog);
