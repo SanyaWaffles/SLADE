@@ -266,7 +266,6 @@ void GfxConvDialog::setupLayout()
 
 	pal_chooser_target = new PaletteChooser(this, -1);
 	pal_chooser_target->selectPalette(target_palette_name);
-<<<<<<< HEAD
 	hbox->Add(pal_chooser_target, 1, wxEXPAND|wxRIGHT, 4);
 
 	btn_colorimetry_settings = new wxBitmapButton(this, -1, Icons::getIcon(Icons::GENERAL, "settings"), wxDefaultPosition, wxDefaultSize);
@@ -274,9 +273,6 @@ void GfxConvDialog::setupLayout()
 	hbox->Add(btn_colorimetry_settings, 0, wxEXPAND, 0);
 
 	vbox->Add(hbox, 0, wxEXPAND | wxALL, 4);
-=======
-	vbox->Add(pal_chooser_target, 0, wxEXPAND|wxALL, 4);
->>>>>>> bleh
 
 
 	// 'Enable transparency' checkbox
